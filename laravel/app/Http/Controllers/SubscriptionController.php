@@ -9,6 +9,11 @@ use Illuminate\Validation\Rule;
 
 class SubscriptionController extends Controller
 {
+    public function __construct()
+    {
+        $this->authorizeResource(Subscription::class, 'subscription');
+    }
+
     /**
      * Display a listing of subscriptions.
      */

@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a91b4528-76c2-48f0-b992-80512f45c812",
 		"name": "Gym API (Laravel)",
-		"description": "Postman collection for Gym Management API (Coaches, Members, Subscriptions, Classes, Registrations).\n\nAll list endpoints are filtered + paginated:\n- `page` (default {{page}}) and `per_page` (1-100, default 15) - enabled on every list request.\n- Optional filters are listed in each request description - tick them in Params to enable.\n- Rows are returned under `data`, next to `total`, `per_page`, `last_page` and `next_page_url`.\n\nPage 2 with 10 per page: `GET /api/members?per_page=10&page=2`\nOr just change the `page` collection variable to 2 and hit Send.",
+		"description": "Postman collection for the Gym Management API (Laravel 11 + JWT).\n\nRoles: **client**, **manager**, **admin**.\n\n1. Open the **Auth** folder and send `Login as Admin` (or Manager/Client). The test script stores the JWT in the `{{token}}` collection variable.\n2. All other requests inherit collection-level Bearer auth: `Authorization: Bearer {{token}}`.\n3. Access rules:\n   - Auth: `/auth/me`, `/auth/refresh`, `/auth/logout` for any authenticated user.\n   - Users + role changes: admin only (403 for others).\n   - Members: manager/admin list and create; a client can read/update only their own member.\n   - Coaches/classes: everyone can read; managers/admins create and update; only admins delete coaches.\n   - Subscriptions: manager/admin CRUD; a client can read their own.\n   - Registrations: a client can create/delete only for their own member; staff can manage all.\n\nAll list endpoints are filtered + paginated (`page`, `per_page`; rows under `data`).\nPage 2 with 10 per page: `GET /api/members?per_page=10&page=2`.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -19,6 +19,11 @@
 		{
 			"key": "page",
 			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
 			"type": "string"
 		}
 	],
@@ -131,6 +136,479 @@
 									"key": "direction",
 									"value": "asc"
 								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"description": "JWT authentication. Login once, then every other request sends `Authorization: Bearer {{token}}`.",
+			"item": [
+				{
+					"name": "Register (client)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Self-registration always creates a **client** and an empty member profile for them. Sending `role` in the body has no effect.\n\nResponse: 201 + access_token (also saved to `{{token}}` by the test script).",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"New Client\",\n    \"email\": \"new.client@gym.test\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"phone\": \"+380500000000\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						}
+					},
+					"event": {
+						"listen": "test",
+						"script": {
+							"type": "text/javascript",
+							"exec": [
+								"const body = pm.response.json();",
+								"if (body.access_token) {",
+								"    pm.collectionVariables.set('token', body.access_token);",
+								"    console.log('token saved to {{token}}');",
+								"}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Login as Admin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Returns `access_token` (JWT). The test script stores it in the collection variable `{{token}}`, which the collection-level Bearer auth uses for every other request.\n\nDemo accounts (password: `password`):\n- admin@gym.test (admin)\n- manager@gym.test (manager)\n- client@gym.test (client)\n\nLogin is throttled to 5 requests per minute.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@gym.test\",\n    \"password\": \"password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					},
+					"event": {
+						"listen": "test",
+						"script": {
+							"type": "text/javascript",
+							"exec": [
+								"const body = pm.response.json();",
+								"if (body.access_token) {",
+								"    pm.collectionVariables.set('token', body.access_token);",
+								"    console.log('token saved to {{token}}');",
+								"}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Login as Manager",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Returns `access_token` (JWT). The test script stores it in the collection variable `{{token}}`, which the collection-level Bearer auth uses for every other request.\n\nDemo accounts (password: `password`):\n- admin@gym.test (admin)\n- manager@gym.test (manager)\n- client@gym.test (client)\n\nLogin is throttled to 5 requests per minute.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"manager@gym.test\",\n    \"password\": \"password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					},
+					"event": {
+						"listen": "test",
+						"script": {
+							"type": "text/javascript",
+							"exec": [
+								"const body = pm.response.json();",
+								"if (body.access_token) {",
+								"    pm.collectionVariables.set('token', body.access_token);",
+								"    console.log('token saved to {{token}}');",
+								"}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Login as Client",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Returns `access_token` (JWT). The test script stores it in the collection variable `{{token}}`, which the collection-level Bearer auth uses for every other request.\n\nDemo accounts (password: `password`):\n- admin@gym.test (admin)\n- manager@gym.test (manager)\n- client@gym.test (client)\n\nLogin is throttled to 5 requests per minute.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"client@gym.test\",\n    \"password\": \"password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					},
+					"event": {
+						"listen": "test",
+						"script": {
+							"type": "text/javascript",
+							"exec": [
+								"const body = pm.response.json();",
+								"if (body.access_token) {",
+								"    pm.collectionVariables.set('token', body.access_token);",
+								"    console.log('token saved to {{token}}');",
+								"}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Me",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "Current user + role + linked member profile. Requires a valid token.",
+						"url": {
+							"raw": "{{base_url}}/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"me"
+							]
+						}
+					}
+				},
+				{
+					"name": "Refresh token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "Rotates the JWT; the old token is blacklisted. The test script saves the new one to `{{token}}`.",
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"refresh"
+							]
+						}
+					},
+					"event": {
+						"listen": "test",
+						"script": {
+							"type": "text/javascript",
+							"exec": [
+								"const body = pm.response.json();",
+								"if (body.access_token) {",
+								"    pm.collectionVariables.set('token', body.access_token);",
+								"    console.log('token saved to {{token}}');",
+								"}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "Blacklists the current JWT. The test script clears `{{token}}`.",
+						"url": {
+							"raw": "{{base_url}}/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"logout"
+							]
+						}
+					},
+					"event": {
+						"listen": "test",
+						"script": {
+							"type": "text/javascript",
+							"exec": [
+								"pm.collectionVariables.set('token', '');"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Users (Admin only)",
+			"description": "User provisioning and role management. `role:admin` middleware returns 403 for manager/client tokens.",
+			"item": [
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "Paginated users (`data`, `total`, `per_page`, `next_page_url`).",
+						"url": {
+							"raw": "{{base_url}}/users?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}"
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}"
+								},
+								{
+									"key": "role",
+									"value": "client",
+									"description": "Filter by role: client|manager|admin.",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "",
+									"description": "Partial match on name or email.",
+									"disabled": true
+								},
+								{
+									"key": "sort",
+									"value": "id",
+									"description": "id|name|email|role",
+									"disabled": true
+								},
+								{
+									"key": "direction",
+									"value": "asc",
+									"description": "asc|desc",
+									"disabled": true
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Creates a user with an explicit role. Clients also get a member profile automatically.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Second Manager\",\n    \"email\": \"second.manager@gym.test\",\n    \"password\": \"password123\",\n    \"role\": \"manager\",\n    \"phone\": \"+380671112233\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get User By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/users/4",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"4"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Updates name/email/password. Role changes use Change Role instead.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Renamed User\",\n    \"email\": \"renamed@gym.test\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/4",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"4"
+							]
+						}
+					}
+				},
+				{
+					"name": "Change Role",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Set role to client|manager|admin. An admin cannot change their own role (422).",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"role\": \"manager\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/4/role",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"4",
+								"role"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "An admin cannot delete their own account (422).",
+						"url": {
+							"raw": "{{base_url}}/users/4",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"4"
 							]
 						}
 					}
@@ -1045,5 +1523,15 @@
 				}
 			]
 		}
-	]
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	}
 }

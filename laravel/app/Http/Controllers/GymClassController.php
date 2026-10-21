@@ -9,6 +9,11 @@ use Illuminate\Validation\Rule;
 
 class GymClassController extends Controller
 {
+    public function __construct()
+    {
+        $this->authorizeResource(GymClass::class, 'class');
+    }
+
     /**
      * Display a listing of classes.
      */

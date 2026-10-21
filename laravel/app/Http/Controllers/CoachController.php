@@ -8,6 +8,11 @@ use Illuminate\Http\Request;
 
 class CoachController extends Controller
 {
+    public function __construct()
+    {
+        $this->authorizeResource(Coach::class, 'coach');
+    }
+
     /**
      * Display a listing of coaches.
      */

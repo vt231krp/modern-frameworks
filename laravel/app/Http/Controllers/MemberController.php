@@ -9,6 +9,11 @@ use Illuminate\Validation\Rule;
 
 class MemberController extends Controller
 {
+    public function __construct()
+    {
+        $this->authorizeResource(Member::class, 'member');
+    }
+
     /**
      * Display a listing of members.
      */
