@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a91b4528-76c2-48f0-b992-80512f45c812",
 		"name": "Gym API (Laravel)",
-		"description": "Postman collection for Gym Management API (Coaches, Members, Subscriptions, Classes, Registrations)",
+		"description": "Postman collection for Gym Management API (Coaches, Members, Subscriptions, Classes, Registrations).\n\nAll list endpoints are filtered + paginated:\n- `page` (default {{page}}) and `per_page` (1-100, default 15) - enabled on every list request.\n- Optional filters are listed in each request description - tick them in Params to enable.\n- Rows are returned under `data`, next to `total`, `per_page`, `last_page` and `next_page_url`.\n\nPage 2 with 10 per page: `GET /api/members?per_page=10&page=2`\nOr just change the `page` collection variable to 2 and hit Send.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -10,14 +10,138 @@
 			"key": "base_url",
 			"value": "http://127.0.0.1:8000/api",
 			"type": "string"
+		},
+		{
+			"key": "per_page",
+			"value": "10",
+			"type": "string"
+		},
+		{
+			"key": "page",
+			"value": "1",
+			"type": "string"
 		}
 	],
 	"item": [
 		{
+			"name": "Pagination Examples",
+			"description": "Page 2 with 10 items per page = `?per_page=10&page=2`.\n\n`GET /api/members?per_page=10&page=2`\n\nThe response contains `total`, `per_page`, `last_page`, `current_page` and `next_page_url`. If `next_page_url` is `null`, you are on the last page. `next_page_url` already keeps your filters and per_page, so you can copy it as-is for the next page.",
+			"item": [
+				{
+					"name": "Members - page 1, 10 per page",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "First page. Rows are in `data`; `total` tells you how many there are overall.",
+						"url": {
+							"raw": "{{base_url}}/members?per_page=10&page=1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"members"
+							],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "10"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Members - page 2, 10 per page",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "Second page: same per_page, page=2. Works the same for /coaches, /subscriptions, /classes and /registrations.",
+						"url": {
+							"raw": "{{base_url}}/members?per_page=10&page=2",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"members"
+							],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "10"
+								},
+								{
+									"key": "page",
+									"value": "2"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Classes - page 2, 10 per page (with filter)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"description": "Filters are kept when paginating: page 2 of the available classes only.",
+						"url": {
+							"raw": "{{base_url}}/classes?page=2&per_page=10&available=1&sort=class_time&direction=asc",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"classes"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "per_page",
+									"value": "10"
+								},
+								{
+									"key": "available",
+									"value": "1"
+								},
+								{
+									"key": "sort",
+									"value": "class_time"
+								},
+								{
+									"key": "direction",
+									"value": "asc"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
 			"name": "Coaches",
 			"item": [
 				{
-					"name": "Get All Coaches",
+					"name": "List Coaches (filters + pagination)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -27,10 +151,45 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/coaches",
-							"host": ["{{base_url}}"],
-							"path": ["coaches"]
-						}
+							"raw": "{{base_url}}/coaches?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"coaches"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}",
+									"description": "Page number, starts at 1."
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}",
+									"description": "Items per page, 1-100. Default 15."
+								},
+								{
+									"key": "name",
+									"value": "",
+									"description": "Partial match on name.",
+									"disabled": true
+								},
+								{
+									"key": "phone",
+									"value": "",
+									"description": "Partial match on phone.",
+									"disabled": true
+								},
+								{
+									"key": "with_classes",
+									"value": "1",
+									"description": "1 = coaches with classes, 0 = without.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Paginated list of coaches (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `name`, `phone`, `with_classes` (1/0).\nSort: `sort` (coach_id|name), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
 					}
 				},
 				{
@@ -53,8 +212,12 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/coaches",
-							"host": ["{{base_url}}"],
-							"path": ["coaches"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"coaches"
+							]
 						}
 					}
 				},
@@ -70,8 +233,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/coaches/1",
-							"host": ["{{base_url}}"],
-							"path": ["coaches", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"coaches",
+								"1"
+							]
 						}
 					}
 				},
@@ -95,8 +263,13 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/coaches/1",
-							"host": ["{{base_url}}"],
-							"path": ["coaches", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"coaches",
+								"1"
+							]
 						}
 					}
 				},
@@ -112,8 +285,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/coaches/1",
-							"host": ["{{base_url}}"],
-							"path": ["coaches", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"coaches",
+								"1"
+							]
 						}
 					}
 				}
@@ -123,7 +301,7 @@
 			"name": "Members",
 			"item": [
 				{
-					"name": "Get All Members",
+					"name": "List Members (filters + pagination)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -133,10 +311,57 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/members",
-							"host": ["{{base_url}}"],
-							"path": ["members"]
-						}
+							"raw": "{{base_url}}/members?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"members"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}",
+									"description": "Page number, starts at 1."
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}",
+									"description": "Items per page, 1-100. Default 15."
+								},
+								{
+									"key": "name",
+									"value": "",
+									"description": "Partial match on name.",
+									"disabled": true
+								},
+								{
+									"key": "phone",
+									"value": "",
+									"description": "Partial match on phone.",
+									"disabled": true
+								},
+								{
+									"key": "join_date_from",
+									"value": "2026-01-01",
+									"description": "Inclusive lower bound (YYYY-MM-DD).",
+									"disabled": true
+								},
+								{
+									"key": "join_date_to",
+									"value": "2026-12-31",
+									"description": "Inclusive upper bound (YYYY-MM-DD).",
+									"disabled": true
+								},
+								{
+									"key": "active",
+									"value": "1",
+									"description": "1 = has a current subscription, 0 = does not.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Paginated list of members (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `name`, `phone`, `join_date_from`, `join_date_to`, `active` (1/0).\nSort: `sort` (member_id|name|join_date), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
 					}
 				},
 				{
@@ -159,8 +384,12 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/members",
-							"host": ["{{base_url}}"],
-							"path": ["members"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"members"
+							]
 						}
 					}
 				},
@@ -176,8 +405,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/members/1",
-							"host": ["{{base_url}}"],
-							"path": ["members", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"members",
+								"1"
+							]
 						}
 					}
 				},
@@ -201,8 +435,13 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/members/1",
-							"host": ["{{base_url}}"],
-							"path": ["members", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"members",
+								"1"
+							]
 						}
 					}
 				},
@@ -218,8 +457,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/members/1",
-							"host": ["{{base_url}}"],
-							"path": ["members", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"members",
+								"1"
+							]
 						}
 					}
 				}
@@ -229,7 +473,7 @@
 			"name": "Subscriptions",
 			"item": [
 				{
-					"name": "Get All Subscriptions",
+					"name": "List Subscriptions (filters + pagination)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -239,10 +483,75 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/subscriptions",
-							"host": ["{{base_url}}"],
-							"path": ["subscriptions"]
-						}
+							"raw": "{{base_url}}/subscriptions?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}",
+									"description": "Page number, starts at 1."
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}",
+									"description": "Items per page, 1-100. Default 15."
+								},
+								{
+									"key": "member_id",
+									"value": "1",
+									"description": "Exact member id.",
+									"disabled": true
+								},
+								{
+									"key": "price_min",
+									"value": "",
+									"description": "Minimum price.",
+									"disabled": true
+								},
+								{
+									"key": "price_max",
+									"value": "",
+									"description": "Maximum price.",
+									"disabled": true
+								},
+								{
+									"key": "start_date_from",
+									"value": "",
+									"description": "Inclusive lower bound (YYYY-MM-DD).",
+									"disabled": true
+								},
+								{
+									"key": "start_date_to",
+									"value": "",
+									"description": "Inclusive upper bound (YYYY-MM-DD).",
+									"disabled": true
+								},
+								{
+									"key": "end_date_from",
+									"value": "",
+									"description": "Inclusive lower bound (YYYY-MM-DD).",
+									"disabled": true
+								},
+								{
+									"key": "end_date_to",
+									"value": "",
+									"description": "Inclusive upper bound (YYYY-MM-DD).",
+									"disabled": true
+								},
+								{
+									"key": "active",
+									"value": "1",
+									"description": "1 = end_date >= today, 0 = expired.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Paginated list of subscriptions (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `price_min`, `price_max`, `start_date_from/to`, `end_date_from/to`, `active` (1/0).\nSort: `sort` (sub_id|member_id|start_date|end_date|price), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
 					}
 				},
 				{
@@ -265,8 +574,12 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/subscriptions",
-							"host": ["{{base_url}}"],
-							"path": ["subscriptions"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions"
+							]
 						}
 					}
 				},
@@ -282,8 +595,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/subscriptions/1",
-							"host": ["{{base_url}}"],
-							"path": ["subscriptions", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								"1"
+							]
 						}
 					}
 				},
@@ -307,8 +625,13 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/subscriptions/1",
-							"host": ["{{base_url}}"],
-							"path": ["subscriptions", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								"1"
+							]
 						}
 					}
 				},
@@ -324,8 +647,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/subscriptions/1",
-							"host": ["{{base_url}}"],
-							"path": ["subscriptions", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								"1"
+							]
 						}
 					}
 				}
@@ -335,7 +663,7 @@
 			"name": "Classes",
 			"item": [
 				{
-					"name": "Get All Classes",
+					"name": "List Classes (filters + pagination)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -345,10 +673,69 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/classes",
-							"host": ["{{base_url}}"],
-							"path": ["classes"]
-						}
+							"raw": "{{base_url}}/classes?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"classes"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}",
+									"description": "Page number, starts at 1."
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}",
+									"description": "Items per page, 1-100. Default 15."
+								},
+								{
+									"key": "title",
+									"value": "",
+									"description": "Partial match on title.",
+									"disabled": true
+								},
+								{
+									"key": "coach_id",
+									"value": "1",
+									"description": "Exact coach id.",
+									"disabled": true
+								},
+								{
+									"key": "class_time_from",
+									"value": "",
+									"description": "Inclusive lower bound (YYYY-MM-DD HH:MM:SS).",
+									"disabled": true
+								},
+								{
+									"key": "class_time_to",
+									"value": "",
+									"description": "Inclusive upper bound (YYYY-MM-DD HH:MM:SS).",
+									"disabled": true
+								},
+								{
+									"key": "capacity_min",
+									"value": "",
+									"description": "Minimum capacity.",
+									"disabled": true
+								},
+								{
+									"key": "capacity_max",
+									"value": "",
+									"description": "Maximum capacity.",
+									"disabled": true
+								},
+								{
+									"key": "available",
+									"value": "1",
+									"description": "1 = still has free seats, 0 = full.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Paginated list of classes (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `title`, `coach_id`, `class_time_from/to`, `capacity_min/max`, `available` (1/0).\nSort: `sort` (class_id|title|class_time|capacity), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
 					}
 				},
 				{
@@ -371,8 +758,12 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/classes",
-							"host": ["{{base_url}}"],
-							"path": ["classes"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"classes"
+							]
 						}
 					}
 				},
@@ -388,8 +779,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/classes/1",
-							"host": ["{{base_url}}"],
-							"path": ["classes", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"classes",
+								"1"
+							]
 						}
 					}
 				},
@@ -413,8 +809,13 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/classes/1",
-							"host": ["{{base_url}}"],
-							"path": ["classes", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"classes",
+								"1"
+							]
 						}
 					}
 				},
@@ -430,8 +831,13 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/classes/1",
-							"host": ["{{base_url}}"],
-							"path": ["classes", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"classes",
+								"1"
+							]
 						}
 					}
 				}
@@ -441,7 +847,7 @@
 			"name": "Registrations",
 			"item": [
 				{
-					"name": "Get All Registrations",
+					"name": "List Registrations (filters + pagination)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -451,10 +857,39 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/registrations",
-							"host": ["{{base_url}}"],
-							"path": ["registrations"]
-						}
+							"raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"registrations"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}",
+									"description": "Page number, starts at 1."
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}",
+									"description": "Items per page, 1-100. Default 15."
+								},
+								{
+									"key": "member_id",
+									"value": "1",
+									"description": "Exact member id.",
+									"disabled": true
+								},
+								{
+									"key": "class_id",
+									"value": "1",
+									"description": "Exact class id.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Paginated list of registrations (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `class_id`.\nSort: `sort` (member_id|class_id), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
 					}
 				},
 				{
@@ -468,16 +903,31 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/registrations?member_id=1",
-							"host": ["{{base_url}}"],
-							"path": ["registrations"],
+							"raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"registrations"
+							],
 							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}",
+									"description": "Page number, starts at 1."
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}",
+									"description": "Items per page, 1-100. Default 15."
+								},
 								{
 									"key": "member_id",
 									"value": "1"
 								}
 							]
-						}
+						},
+						"description": "Paginated list of registrations (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `class_id`.\nSort: `sort` (member_id|class_id), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
 					}
 				},
 				{
@@ -491,16 +941,31 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/registrations?class_id=1",
-							"host": ["{{base_url}}"],
-							"path": ["registrations"],
+							"raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"registrations"
+							],
 							"query": [
+								{
+									"key": "page",
+									"value": "{{page}}",
+									"description": "Page number, starts at 1."
+								},
+								{
+									"key": "per_page",
+									"value": "{{per_page}}",
+									"description": "Items per page, 1-100. Default 15."
+								},
 								{
 									"key": "class_id",
 									"value": "1"
 								}
 							]
-						}
+						},
+						"description": "Paginated list of registrations (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `class_id`.\nSort: `sort` (member_id|class_id), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
 					}
 				},
 				{
@@ -523,8 +988,12 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/registrations",
-							"host": ["{{base_url}}"],
-							"path": ["registrations"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"registrations"
+							]
 						}
 					}
 				},
@@ -540,8 +1009,14 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/registrations/1/1",
-							"host": ["{{base_url}}"],
-							"path": ["registrations", "1", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"registrations",
+								"1",
+								"1"
+							]
 						}
 					}
 				},
@@ -557,8 +1032,14 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/registrations/1/1",
-							"host": ["{{base_url}}"],
-							"path": ["registrations", "1", "1"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"registrations",
+								"1",
+								"1"
+							]
 						}
 					}
 				}

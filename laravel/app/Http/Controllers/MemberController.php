@@ -5,15 +5,42 @@ namespace App\Http\Controllers;
 use App\Models\Member;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class MemberController extends Controller
 {
     /**
      * Display a listing of members.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $members = Member::withCount(['subscriptions', 'classes'])->get();
+        $filters = $request->validate([
+            'name'           => 'nullable|string|max:100',
+            'phone'          => 'nullable|string|max:20',
+            'join_date_from' => 'nullable|date',
+            'join_date_to'   => ['nullable', 'date', Rule::when(
+                $request->filled('join_date_from'),
+                'after_or_equal:join_date_from'
+            )],
+            'active'         => 'nullable|boolean',
+            'sort'           => 'nullable|in:member_id,name,join_date',
+            'direction'      => 'nullable|in:asc,desc',
+            'per_page'       => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $active = $request->filled('active') ? $request->boolean('active') : null;
+        $perPage = (int) ($filters['per_page'] ?? 15);
+
+        $members = Member::withCount(['subscriptions', 'classes'])
+            ->when(isset($filters['name']), fn ($q) => $q->where('name', 'like', "%{$filters['name']}%"))
+            ->when(isset($filters['phone']), fn ($q) => $q->where('phone', 'like', "%{$filters['phone']}%"))
+            ->when(isset($filters['join_date_from']), fn ($q) => $q->whereDate('join_date', '>=', $filters['join_date_from']))
+            ->when(isset($filters['join_date_to']), fn ($q) => $q->whereDate('join_date', '<=', $filters['join_date_to']))
+            ->when($active === true, fn ($q) => $q->whereHas('subscriptions', fn ($s) => $s->where('end_date', '>=', now()->toDateString())))
+            ->when($active === false, fn ($q) => $q->whereDoesntHave('subscriptions', fn ($s) => $s->where('end_date', '>=', now()->toDateString())))
+            ->orderBy($filters['sort'] ?? 'member_id', $filters['direction'] ?? 'asc')
+            ->paginate(max(1, min($perPage, 100)))
+            ->appends($filters);
 
         return response()->json($members);
     }

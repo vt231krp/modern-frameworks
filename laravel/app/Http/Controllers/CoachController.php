@@ -11,9 +11,27 @@ class CoachController extends Controller
     /**
      * Display a listing of coaches.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $coaches = Coach::withCount('classes')->get();
+        $filters = $request->validate([
+            'name'         => 'nullable|string|max:100',
+            'phone'        => 'nullable|string|max:20',
+            'with_classes' => 'nullable|boolean',
+            'sort'         => 'nullable|in:coach_id,name',
+            'direction'    => 'nullable|in:asc,desc',
+            'per_page'     => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $withClasses = $request->filled('with_classes') ? $request->boolean('with_classes') : null;
+        $perPage = (int) ($filters['per_page'] ?? 15);
+
+        $coaches = Coach::withCount('classes')
+            ->when(isset($filters['name']), fn ($q) => $q->where('name', 'like', "%{$filters['name']}%"))
+            ->when(isset($filters['phone']), fn ($q) => $q->where('phone', 'like', "%{$filters['phone']}%"))
+            ->when(!is_null($withClasses), fn ($q) => $withClasses ? $q->has('classes') : $q->doesntHave('classes'))
+            ->orderBy($filters['sort'] ?? 'coach_id', $filters['direction'] ?? 'asc')
+            ->paginate(max(1, min($perPage, 100)))
+            ->appends($filters);
 
         return response()->json($coaches);
     }

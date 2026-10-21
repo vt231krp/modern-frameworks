@@ -14,17 +14,24 @@ class RegistrationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Registration::with(['member', 'gymClass']);
+        $filters = $request->validate([
+            'member_id' => 'nullable|integer|exists:members,member_id',
+            'class_id'  => 'nullable|integer|exists:classes,class_id',
+            'sort'      => 'nullable|in:member_id,class_id',
+            'direction' => 'nullable|in:asc,desc',
+            'per_page'  => 'nullable|integer|min:1|max:100',
+        ]);
 
-        if ($request->filled('member_id')) {
-            $query->where('member_id', $request->query('member_id'));
-        }
+        $perPage = (int) ($filters['per_page'] ?? 15);
 
-        if ($request->filled('class_id')) {
-            $query->where('class_id', $request->query('class_id'));
-        }
+        $registrations = Registration::with(['member', 'gymClass'])
+            ->when(isset($filters['member_id']), fn ($q) => $q->where('member_id', $filters['member_id']))
+            ->when(isset($filters['class_id']), fn ($q) => $q->where('class_id', $filters['class_id']))
+            ->orderBy($filters['sort'] ?? 'member_id', $filters['direction'] ?? 'asc')
+            ->paginate(max(1, min($perPage, 100)))
+            ->appends($filters);
 
-        return response()->json($query->get());
+        return response()->json($registrations);
     }
 
     /**
