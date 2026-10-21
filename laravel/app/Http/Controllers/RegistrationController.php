@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Role;
 use App\Models\GymClass;
+use App\Models\Member;
 use App\Models\Registration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +16,8 @@ class RegistrationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $this->authorize('viewAny', Registration::class);
+
         $filters = $request->validate([
             'member_id' => 'nullable|integer|exists:members,member_id',
             'class_id'  => 'nullable|integer|exists:classes,class_id',
@@ -39,10 +43,23 @@ class RegistrationController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->authorize('create', Registration::class);
+
         $validated = $request->validate([
             'member_id' => 'required|integer|exists:members,member_id',
             'class_id'  => 'required|integer|exists:classes,class_id',
         ]);
+
+        // A client may only register their own member profile.
+        if ($request->user()->role === Role::Client) {
+            $member = Member::find($validated['member_id']);
+
+            if (! $member || $member->user_id !== $request->user()->id) {
+                return response()->json([
+                    'message' => 'You can only register your own member profile.',
+                ], 403);
+            }
+        }
 
         $alreadyRegistered = Registration::where('member_id', $validated['member_id'])
             ->where('class_id', $validated['class_id'])
@@ -78,6 +95,8 @@ class RegistrationController extends Controller
             ->where('class_id', $classId)
             ->firstOrFail();
 
+        $this->authorize('view', $registration);
+
         return response()->json($registration);
     }
 
@@ -97,13 +116,19 @@ class RegistrationController extends Controller
 
         $deleted = Registration::where('member_id', $mId)
             ->where('class_id', $cId)
-            ->delete();
+            ->first();
 
-        if (!$deleted) {
+        if (! $deleted) {
             return response()->json([
                 'message' => 'Registration not found.',
             ], 404);
         }
+
+        $this->authorize('delete', $deleted);
+
+        Registration::where('member_id', $mId)
+            ->where('class_id', $cId)
+            ->delete();
 
         return response()->json(['message' => 'Registration cancelled successfully']);
     }
