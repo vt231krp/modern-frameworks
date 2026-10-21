@@ -109,7 +109,10 @@ class UserController extends Controller
      */
     public function destroy(Request $request, User $user): JsonResponse
     {
-        if ($user->id === $request->user()->id) {
+        /** @var User $current */
+        $current = $request->user();
+
+        if ($user->id === $current->id) {
             return response()->json(['message' => 'You cannot delete your own account.'], 422);
         }
 
@@ -127,7 +130,10 @@ class UserController extends Controller
             'role' => ['required', Rule::in(Role::values())],
         ]);
 
-        if ($user->id === $request->user()->id) {
+        /** @var User $current */
+        $current = $request->user();
+
+        if ($user->id === $current->id) {
             return response()->json(['message' => 'You cannot change your own role.'], 422);
         }
 

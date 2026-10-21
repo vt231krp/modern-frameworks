@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules\Password;
+use PHPOpenSourceSaver\JWTAuth\JWTGuard;
 
 class AuthController extends Controller
 {
@@ -43,7 +44,7 @@ class AuthController extends Controller
             return $user;
         });
 
-        $token = auth('api')->login($user);
+        $token = $this->guard()->login($user);
 
         return $this->tokenResponse($token, $user->load('member'), 'Registered successfully.', 201);
     }
@@ -58,21 +59,21 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $token = auth('api')->attempt($credentials);
+        $token = $this->guard()->attempt($credentials);
 
-        if (! $token) {
+        if (! is_string($token)) {
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
-        return $this->tokenResponse($token, auth('api')->user()->load('member'));
+        return $this->tokenResponse($token, $this->currentUser()->load('member'));
     }
 
     /**
      * Return the currently authenticated user.
      */
-    public function me(Request $request): JsonResponse
+    public function me(): JsonResponse
     {
-        return response()->json($request->user()->load('member'));
+        return response()->json($this->currentUser()->load('member'));
     }
 
     /**
@@ -80,9 +81,9 @@ class AuthController extends Controller
      */
     public function refresh(): JsonResponse
     {
-        $token = auth('api')->refresh();
+        $token = $this->guard()->refresh();
 
-        return $this->tokenResponse($token, auth('api')->user()->load('member'), 'Token refreshed.');
+        return $this->tokenResponse($token, $this->currentUser()->load('member'), 'Token refreshed.');
     }
 
     /**
@@ -90,7 +91,7 @@ class AuthController extends Controller
      */
     public function logout(): JsonResponse
     {
-        auth('api')->logout();
+        $this->guard()->logout();
 
         return response()->json(['message' => 'Logged out successfully.']);
     }
@@ -101,8 +102,35 @@ class AuthController extends Controller
             'message' => $message,
             'access_token' => $token,
             'token_type' => 'bearer',
-            'expires_in' => auth('api')->factory()->getTTL() * 60,
+            'expires_in' => (int) $this->guard()->getTTL() * 60,
             'user' => $user,
         ], $status);
+    }
+
+    /**
+     * Resolve the JWT guard with a concrete type for static analysis.
+     */
+    private function guard(): JWTGuard
+    {
+        /** @var JWTGuard $guard */
+        $guard = auth('api');
+
+        assert($guard instanceof JWTGuard);
+
+        return $guard;
+    }
+
+    /**
+     * Resolve the authenticated user or abort with 401.
+     */
+    private function currentUser(): User
+    {
+        $user = $this->guard()->user();
+
+        if (! $user instanceof User) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        return $user;
     }
 }

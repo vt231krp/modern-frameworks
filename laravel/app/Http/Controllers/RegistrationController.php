@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Models\GymClass;
 use App\Models\Member;
 use App\Models\Registration;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -51,10 +52,13 @@ class RegistrationController extends Controller
         ]);
 
         // A client may only register their own member profile.
-        if ($request->user()->role === Role::Client) {
+        /** @var User $user */
+        $user = $request->user();
+
+        if ($user->role === Role::Client) {
             $member = Member::find($validated['member_id']);
 
-            if (! $member || $member->user_id !== $request->user()->id) {
+            if (! $member || $member->user_id !== $user->id) {
                 return response()->json([
                     'message' => 'You can only register your own member profile.',
                 ], 403);
