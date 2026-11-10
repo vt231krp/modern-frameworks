@@ -2,6 +2,12 @@
 
 use Illuminate\Support\Str;
 
+// PHP 8.4+ deprecates the PDO::MYSQL_ATTR_SSL_CA constant in favour of the
+// Pdo\Mysql class, so resolve it once in a version-agnostic way.
+$mysqlSslCaOption = defined('Pdo\\Mysql::MYSQL_ATTR_SSL_CA')
+    ? \Pdo\Mysql::MYSQL_ATTR_SSL_CA
+    : PDO::MYSQL_ATTR_SSL_CA;
+
 return [
 
     /*
@@ -55,7 +61,7 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                $mysqlSslCaOption => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
 
@@ -75,7 +81,7 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                $mysqlSslCaOption => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
 

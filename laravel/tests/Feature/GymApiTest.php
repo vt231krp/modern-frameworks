@@ -2,23 +2,40 @@
 
 namespace Tests\Feature;
 
+use App\Enums\Role;
 use App\Models\Coach;
 use App\Models\GymClass;
 use App\Models\Member;
-use App\Models\Registration;
-use App\Models\Subscription;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use Tests\TestCase;
 
+#[IgnoreDeprecations]
 class GymApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $admin = User::create([
+            'name' => 'Test Admin',
+            'email' => 'admin@test.local',
+            'password' => 'password',
+        ]);
+        $admin->role = Role::Admin;
+        $admin->save();
+
+        $this->withHeader('Authorization', 'Bearer '.auth('api')->login($admin));
+    }
 
     public function test_coach_crud(): void
     {
         // 1. Create
         $response = $this->postJson('/api/coaches', [
-            'name'  => 'Олександр Коваленко',
+            'name' => 'Олександр Коваленко',
             'phone' => '+380991112233',
         ]);
         $response->assertStatus(201)
@@ -29,7 +46,7 @@ class GymApiTest extends TestCase
         // 2. Index
         $this->getJson('/api/coaches')
             ->assertStatus(200)
-            ->assertJsonCount(1);
+            ->assertJsonCount(1, 'data');
 
         // 3. Show
         $this->getJson("/api/coaches/{$coachId}")
@@ -53,7 +70,7 @@ class GymApiTest extends TestCase
     {
         // Create Member
         $memberRes = $this->postJson('/api/members', [
-            'name'  => 'Марія Іваненко',
+            'name' => 'Марія Іваненко',
             'phone' => '+380931234567',
         ]);
         $memberRes->assertStatus(201);
@@ -61,20 +78,20 @@ class GymApiTest extends TestCase
 
         // Create Valid Subscription
         $subRes = $this->postJson('/api/subscriptions', [
-            'member_id'  => $memberId,
+            'member_id' => $memberId,
             'start_date' => '2026-10-15',
-            'end_date'   => '2026-11-15',
-            'price'      => 1200.50,
+            'end_date' => '2026-11-15',
+            'price' => 1200.50,
         ]);
         $subRes->assertStatus(201);
         $subId = $subRes->json('sub_id');
 
         // Test Subscription validation (end_date before start_date should fail)
         $this->postJson('/api/subscriptions', [
-            'member_id'  => $memberId,
+            'member_id' => $memberId,
             'start_date' => '2026-10-15',
-            'end_date'   => '2026-10-01',
-            'price'      => 500,
+            'end_date' => '2026-10-01',
+            'price' => 500,
         ])->assertStatus(422);
 
         // Show Subscription
@@ -94,10 +111,10 @@ class GymApiTest extends TestCase
 
         // Create Class
         $classRes = $this->postJson('/api/classes', [
-            'title'      => 'Бокс',
-            'coach_id'   => $coach->coach_id,
+            'title' => 'Бокс',
+            'coach_id' => $coach->coach_id,
             'class_time' => '2026-10-20 18:00:00',
-            'capacity'   => 1,
+            'capacity' => 1,
         ]);
         $classRes->assertStatus(201);
         $classId = $classRes->json('class_id');
@@ -105,34 +122,55 @@ class GymApiTest extends TestCase
         // Register Member to Class
         $regRes = $this->postJson('/api/registrations', [
             'member_id' => $member->member_id,
-            'class_id'  => $classId,
+            'class_id' => $classId,
         ]);
         $regRes->assertStatus(201);
 
         // Duplicate registration should fail
         $this->postJson('/api/registrations', [
             'member_id' => $member->member_id,
-            'class_id'  => $classId,
+            'class_id' => $classId,
         ])->assertStatus(422);
 
         // Second member registration should fail due to capacity limit (capacity = 1)
         $secondMember = Member::create(['name' => 'Андрій', 'phone' => '99999']);
         $this->postJson('/api/registrations', [
             'member_id' => $secondMember->member_id,
-            'class_id'  => $classId,
+            'class_id' => $classId,
         ])->assertStatus(422);
 
         // Show registration
         $this->getJson("/api/registrations/{$member->member_id}/{$classId}")
             ->assertStatus(200);
 
+        // Move registration to another class (Update)
+        $secondClass = GymClass::create([
+            'title' => 'Йога',
+            'class_time' => '2026-10-21 18:00:00',
+            'capacity' => 5,
+        ]);
+
+        $this->putJson("/api/registrations/{$member->member_id}/{$classId}", [
+            'class_id' => $secondClass->class_id,
+        ])->assertStatus(200)
+            ->assertJsonPath('class_id', $secondClass->class_id);
+
+        $this->assertDatabaseMissing('registrations', [
+            'member_id' => $member->member_id,
+            'class_id' => $classId,
+        ]);
+        $this->assertDatabaseHas('registrations', [
+            'member_id' => $member->member_id,
+            'class_id' => $secondClass->class_id,
+        ]);
+
         // Cancel registration
-        $this->deleteJson("/api/registrations/{$member->member_id}/{$classId}")
+        $this->deleteJson("/api/registrations/{$member->member_id}/{$secondClass->class_id}")
             ->assertStatus(200);
 
         $this->assertDatabaseMissing('registrations', [
             'member_id' => $member->member_id,
-            'class_id'  => $classId,
+            'class_id' => $secondClass->class_id,
         ]);
     }
 }

@@ -20,7 +20,11 @@ return new class extends Migration
             $table->decimal('price', 10, 2)->nullable();
         });
 
-        DB::statement('ALTER TABLE subscriptions ADD CONSTRAINT check_end_date CHECK (end_date >= start_date)');
+        // SQLite (used by the test suite) does not support adding a CHECK
+        // constraint to an existing table; MySQL keeps the DB-level guard.
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE subscriptions ADD CONSTRAINT check_end_date CHECK (end_date >= start_date)');
+        }
     }
 
     /**

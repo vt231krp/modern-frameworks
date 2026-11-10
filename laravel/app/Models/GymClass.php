@@ -25,6 +25,7 @@ class GymClass extends Model
     protected $fillable = [
         'title',
         'coach_id',
+        'room_id',
         'class_time',
         'capacity',
     ];
@@ -42,6 +43,11 @@ class GymClass extends Model
         return $this->belongsTo(Coach::class, 'coach_id', 'coach_id');
     }
 
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(Room::class, 'room_id', 'room_id');
+    }
+
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(Member::class, 'registrations', 'class_id', 'member_id');
@@ -50,5 +56,10 @@ class GymClass extends Model
     public function registrations(): HasMany
     {
         return $this->hasMany(Registration::class, 'class_id', 'class_id');
+    }
+
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class, 'class_id', 'class_id');
     }
 }

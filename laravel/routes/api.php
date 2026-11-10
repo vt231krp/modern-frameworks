@@ -1,10 +1,15 @@
 <?php
 
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CoachController;
+use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\GymClassController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\MembershipPlanController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RegistrationController;
+use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -40,9 +45,15 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('subscriptions', SubscriptionController::class);
     Route::apiResource('classes', GymClassController::class);
     Route::apiResource('members', MemberController::class);
+    Route::apiResource('rooms', RoomController::class);
+    Route::apiResource('equipment', EquipmentController::class);
+    Route::apiResource('plans', MembershipPlanController::class);
+    Route::apiResource('payments', PaymentController::class);
+    Route::apiResource('attendances', AttendanceController::class);
 
     Route::get('registrations', [RegistrationController::class, 'index']);
     Route::post('registrations', [RegistrationController::class, 'store']);
     Route::get('registrations/{memberId}/{classId}', [RegistrationController::class, 'show']);
+    Route::match(['put', 'patch'], 'registrations/{memberId}/{classId}', [RegistrationController::class, 'update']);
     Route::delete('registrations/{memberId?}/{classId?}', [RegistrationController::class, 'destroy']);
 });

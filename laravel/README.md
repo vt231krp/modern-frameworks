@@ -1,66 +1,251 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Gym API — Sports Club Management
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+REST API for a sports club built with **Laravel 11**, **JWT authentication** and **role-based access control**. It covers trainers, members, membership plans, subscriptions, payments, rooms, equipment, group classes, registrations and attendance records.
 
-## About Laravel
+## Tech stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP 8.2+ / Laravel 11
+- MySQL 8 (or SQLite for quick local runs)
+- JWT via `php-open-source-saver/jwt-auth`
+- PHPUnit 10 (in-memory SQLite)
+- Laravel Pint for code style
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Requirements
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP 8.2+ with `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype`, `json`, `bcmath`
+- Composer 2
+- MySQL 8 / MariaDB (optional if using SQLite)
 
-## Learning Laravel
+## Installation
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+```bash
+cd laravel
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan jwt:secret
+```
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Database
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+**MySQL (recommended):**
 
-## Laravel Sponsors
+```sql
+CREATE DATABASE laravel_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'laravel_user'@'127.0.0.1' IDENTIFIED BY 'password123';
+GRANT ALL PRIVILEGES ON laravel_db.* TO 'laravel_user'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+`.env`:
 
-### Premium Partners
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=laravel_db
+DB_USERNAME=laravel_user
+DB_PASSWORD=password123
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+**SQLite (quick local option):**
 
-## Contributing
+```env
+DB_CONNECTION=sqlite
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+touch database/database.sqlite
+```
 
-## Code of Conduct
+### Migrations and seed data
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan migrate
+php artisan db:seed
+```
 
-## Security Vulnerabilities
+Or recreate the database from scratch:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan migrate:fresh --seed
+```
 
-## License
+> `migrate:fresh` drops all tables before migrating. Use it only for local development.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+The seeder is idempotent and populates every domain table with demo data.
+
+## Running
+
+```bash
+php artisan serve
+```
+
+The API is available at `http://127.0.0.1:8000/api`.
+
+### Demo accounts
+
+| Email              | Role    | Password   |
+| ------------------ | ------- | ---------- |
+| `admin@gym.test`   | admin   | `password` |
+| `manager@gym.test` | manager | `password` |
+| `client@gym.test`  | client  | `password` |
+
+### Authenticate and call the API
+
+```bash
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@gym.test","password":"password"}' \
+  | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["access_token"];')
+
+curl http://127.0.0.1:8000/api/coaches \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Send the JWT as `Authorization: Bearer <token>` for every endpoint except `auth/register` and `auth/login`.
+
+## Domain model
+
+```
+users ──1:1── members
+                 │
+                 ├──1:N── subscriptions ──N:1── membership_plans
+                 │            │
+                 │            └──1:N── payments
+                 │
+                 ├──1:N── registrations ──N:1── classes ──N:1── coaches
+                 │                                  │
+                 │                                  ├──N:1── rooms ──1:N── equipment
+                 │                                  │
+                 └──1:N── attendances ──────────────┘
+```
+
+| Table              | Purpose                                           |
+| ------------------ | ------------------------------------------------- |
+| `users`            | Accounts and roles (`admin`, `manager`, `client`) |
+| `coaches`          | Trainers                                          |
+| `rooms`            | Club rooms with capacity                          |
+| `equipment`        | Equipment assigned to a room                      |
+| `members`          | Club members (linked to a client user)            |
+| `membership_plans` | Subscription plans: price and duration            |
+| `subscriptions`    | Member subscriptions; optional plan reference     |
+| `payments`         | Payments for subscriptions                        |
+| `classes`          | Group classes with coach, room, time and capacity |
+| `registrations`    | Member registrations for classes                  |
+| `attendances`      | Actual class visits of registered members         |
+
+See [PROJECT.md](PROJECT.md) for the full domain reference and business rules.
+
+## Roles and permissions
+
+| Role      | Permissions                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------- |
+| `client`  | Own profile, own registrations and attendance; can view public schedules                                |
+| `manager` | Manage coaches, rooms, equipment, plans, subscriptions, payments, classes, registrations and attendance |
+| `admin`   | Everything above plus users, role changes and deletions                                                 |
+
+Permissions are enforced by Laravel policies (`app/Policies`) and the `role:` middleware. Admins bypass all policy checks through `Gate::before`.
+
+## API overview
+
+| Resource         | Base endpoint        | Notes                                              |
+| ---------------- | -------------------- | -------------------------------------------------- |
+| Auth             | `/api/auth`          | `register`, `login`, `me`, `refresh`, `logout`     |
+| Users            | `/api/users`         | Admin only; `PATCH /api/users/{id}/role`           |
+| Coaches          | `/api/coaches`       | Full CRUD                                          |
+| Members          | `/api/members`       | Full CRUD; clients see their own profile           |
+| Membership plans | `/api/plans`         | Full CRUD                                          |
+| Subscriptions    | `/api/subscriptions` | Full CRUD; derives price/end date from plan        |
+| Payments         | `/api/payments`      | Full CRUD; daily cron marks overdue                |
+| Rooms            | `/api/rooms`         | Full CRUD                                          |
+| Equipment        | `/api/equipment`     | Full CRUD                                          |
+| Classes          | `/api/classes`       | Full CRUD; capacity bounded by room capacity       |
+| Registrations    | `/api/registrations` | `GET/POST`, `GET/PUT/DELETE /{memberId}/{classId}` |
+| Attendances      | `/api/attendances`   | Full CRUD; requires an existing registration       |
+
+### Filtering, sorting and pagination
+
+Every `index` endpoint supports:
+
+- `page`, `per_page` (1–100, default 15)
+- `sort`, `direction` (`asc` / `desc`)
+- Resource-specific filters (see `description` of each Postman request, or the controller validation rules)
+
+Example:
+
+```http
+GET /api/classes?room_id=1&available=1&sort=class_time&direction=asc&per_page=10&page=1
+```
+
+Paginated responses contain `data`, `current_page`, `per_page`, `total`, `last_page` and navigation URLs.
+
+## Business rules
+
+- A subscription created with `plan_id` takes its `price` and `end_date` from the plan (`start_date + duration_days`) unless explicit values are provided.
+- Inactive membership plans cannot be used for new subscriptions.
+- A class capacity cannot exceed the capacity of its room; a room cannot be shrunk below its largest scheduled class.
+- Attendance can only be recorded for a member who is registered for the class.
+- A registration cannot be duplicated, and it respects class capacity.
+- A client can only register for, view or update their own member profile and registrations.
+- Pending payments with a past `payment_date` are flipped to `overdue` by the daily cron.
+
+## Scheduled tasks
+
+The only scheduled operation is `payments:mark-overdue` (daily at 00:10):
+
+```bash
+php artisan payments:mark-overdue      # run once manually
+php artisan schedule:list              # inspect the schedule
+php artisan schedule:work              # local scheduler loop
+```
+
+Production crontab:
+
+```cron
+* * * * * cd /path/to/laravel && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Tests
+
+```bash
+vendor/bin/phpunit
+# or
+php artisan test
+```
+
+The suite uses in-memory SQLite (`phpunit.xml`) and does not require a running MySQL server. Current coverage: **20 tests, 143 assertions** across auth, roles, CRUD, filtering, pagination, domain rules and the cron command.
+
+## Postman collection
+
+Import `Gym_API.postman_collection.json` into Postman.
+
+1. Start the API with `php artisan serve`.
+2. Run **Auth → Login as Admin**; the test script saves the JWT to `{{token}}`.
+3. Create resources in dependency order: rooms → coaches → plans → members → classes → subscriptions → payments → registrations → attendances.
+4. Create requests store the new ID in collection variables, so follow-up requests need no manual edits.
+
+The collection includes all CRUD endpoints, filter examples, pagination examples and test scripts.
+
+## Project structure
+
+```
+app/
+├── Console/Commands/        # payments:mark-overdue
+├── Enums/Role.php           # admin / manager / client
+├── Http/Controllers/        # thin controllers (validation + authorization)
+├── Http/Middleware/         # role middleware
+├── Models/                  # Eloquent models
+├── Policies/                # per-model authorization
+├── Services/                # business logic and query filtering
+routes/
+├── api.php                  # REST API
+└── console.php              # schedule definition
+database/
+├── migrations/              # 14 schema migrations
+├── seeders/                 # idempotent demo data
+└── factories/
+tests/
+├── Feature/                 # API, auth, domain and cron tests
+└── Unit/
+```

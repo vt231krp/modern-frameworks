@@ -3,16 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Role;
-use App\Models\Member;
 use App\Models\User;
+use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class UserController extends Controller
 {
+    public function __construct(private readonly UserService $users) {}
+
     /**
      * Display a listing of users (admin only, enforced by route middleware).
      */
@@ -26,19 +27,7 @@ class UserController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $perPage = (int) ($filters['per_page'] ?? 15);
-
-        $users = User::query()
-            ->when(isset($filters['role']), fn ($q) => $q->where('role', $filters['role']))
-            ->when(isset($filters['search']), fn ($q) => $q->where(function ($q) use ($filters) {
-                $q->where('name', 'like', "%{$filters['search']}%")
-                    ->orWhere('email', 'like', "%{$filters['search']}%");
-            }))
-            ->orderBy($filters['sort'] ?? 'id', $filters['direction'] ?? 'asc')
-            ->paginate(max(1, min($perPage, 100)))
-            ->appends($filters);
-
-        return response()->json($users);
+        return response()->json($this->users->paginate($filters));
     }
 
     /**
@@ -54,25 +43,7 @@ class UserController extends Controller
             'phone' => 'nullable|string|max:20',
         ]);
 
-        $user = DB::transaction(function () use ($validated) {
-            $user = new User();
-            $user->name = $validated['name'];
-            $user->email = $validated['email'];
-            $user->password = $validated['password'];
-            $user->role = Role::from($validated['role']);
-            $user->save();
-
-            if ($user->role === Role::Client) {
-                $member = new Member();
-                $member->user_id = $user->id;
-                $member->name = $user->name;
-                $member->phone = $validated['phone'] ?? null;
-                $member->join_date = now()->toDateString();
-                $member->save();
-            }
-
-            return $user;
-        });
+        $user = $this->users->create($validated);
 
         return response()->json($user->load('member'), 201);
     }
@@ -99,7 +70,7 @@ class UserController extends Controller
             'password' => ['sometimes', Password::min(8)],
         ]);
 
-        $user->update($validated);
+        $this->users->update($user, $validated);
 
         return response()->json($user->load('member'));
     }
@@ -112,11 +83,7 @@ class UserController extends Controller
         /** @var User $current */
         $current = $request->user();
 
-        if ($user->id === $current->id) {
-            return response()->json(['message' => 'You cannot delete your own account.'], 422);
-        }
-
-        $user->delete();
+        $this->users->delete($user, $current);
 
         return response()->json(['message' => 'User deleted successfully']);
     }
@@ -137,8 +104,7 @@ class UserController extends Controller
             return response()->json(['message' => 'You cannot change your own role.'], 422);
         }
 
-        $user->role = Role::from($validated['role']);
-        $user->save();
+        $this->users->changeRole($user, $validated['role']);
 
         return response()->json($user->load('member'));
     }

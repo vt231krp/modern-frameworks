@@ -1,1537 +1,2504 @@
 {
-	"info": {
-		"_postman_id": "a91b4528-76c2-48f0-b992-80512f45c812",
-		"name": "Gym API (Laravel)",
-		"description": "Postman collection for the Gym Management API (Laravel 11 + JWT).\n\nRoles: **client**, **manager**, **admin**.\n\n1. Open the **Auth** folder and send `Login as Admin` (or Manager/Client). The test script stores the JWT in the `{{token}}` collection variable.\n2. All other requests inherit collection-level Bearer auth: `Authorization: Bearer {{token}}`.\n3. Access rules:\n   - Auth: `/auth/me`, `/auth/refresh`, `/auth/logout` for any authenticated user.\n   - Users + role changes: admin only (403 for others).\n   - Members: manager/admin list and create; a client can read/update only their own member.\n   - Coaches/classes: everyone can read; managers/admins create and update; only admins delete coaches.\n   - Subscriptions: manager/admin CRUD; a client can read their own.\n   - Registrations: a client can create/delete only for their own member; staff can manage all.\n\nAll list endpoints are filtered + paginated (`page`, `per_page`; rows under `data`).\nPage 2 with 10 per page: `GET /api/members?per_page=10&page=2`.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"variable": [
-		{
-			"key": "base_url",
-			"value": "http://127.0.0.1:8000/api",
-			"type": "string"
-		},
-		{
-			"key": "per_page",
-			"value": "10",
-			"type": "string"
-		},
-		{
-			"key": "page",
-			"value": "1",
-			"type": "string"
-		},
-		{
-			"key": "token",
-			"value": "",
-			"type": "string"
-		}
-	],
-	"item": [
-		{
-			"name": "Pagination Examples",
-			"description": "Page 2 with 10 items per page = `?per_page=10&page=2`.\n\n`GET /api/members?per_page=10&page=2`\n\nThe response contains `total`, `per_page`, `last_page`, `current_page` and `next_page_url`. If `next_page_url` is `null`, you are on the last page. `next_page_url` already keeps your filters and per_page, so you can copy it as-is for the next page.",
-			"item": [
-				{
-					"name": "Members - page 1, 10 per page",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "First page. Rows are in `data`; `total` tells you how many there are overall.",
-						"url": {
-							"raw": "{{base_url}}/members?per_page=10&page=1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"members"
-							],
-							"query": [
-								{
-									"key": "per_page",
-									"value": "10"
-								},
-								{
-									"key": "page",
-									"value": "1"
-								}
-							]
-						}
-					}
-				},
-				{
-					"name": "Members - page 2, 10 per page",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "Second page: same per_page, page=2. Works the same for /coaches, /subscriptions, /classes and /registrations.",
-						"url": {
-							"raw": "{{base_url}}/members?per_page=10&page=2",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"members"
-							],
-							"query": [
-								{
-									"key": "per_page",
-									"value": "10"
-								},
-								{
-									"key": "page",
-									"value": "2"
-								}
-							]
-						}
-					}
-				},
-				{
-					"name": "Classes - page 2, 10 per page (with filter)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "Filters are kept when paginating: page 2 of the available classes only.",
-						"url": {
-							"raw": "{{base_url}}/classes?page=2&per_page=10&available=1&sort=class_time&direction=asc",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"classes"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "2"
-								},
-								{
-									"key": "per_page",
-									"value": "10"
-								},
-								{
-									"key": "available",
-									"value": "1"
-								},
-								{
-									"key": "sort",
-									"value": "class_time"
-								},
-								{
-									"key": "direction",
-									"value": "asc"
-								}
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Auth",
-			"description": "JWT authentication. Login once, then every other request sends `Authorization: Bearer {{token}}`.",
-			"item": [
-				{
-					"name": "Register (client)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"description": "Self-registration always creates a **client** and an empty member profile for them. Sending `role` in the body has no effect.\n\nResponse: 201 + access_token (also saved to `{{token}}` by the test script).",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"New Client\",\n    \"email\": \"new.client@gym.test\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"phone\": \"+380500000000\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/auth/register",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"auth",
-								"register"
-							]
-						}
-					},
-					"event": {
-						"listen": "test",
-						"script": {
-							"type": "text/javascript",
-							"exec": [
-								"const body = pm.response.json();",
-								"if (body.access_token) {",
-								"    pm.collectionVariables.set('token', body.access_token);",
-								"    console.log('token saved to {{token}}');",
-								"}"
-							]
-						}
-					}
-				},
-				{
-					"name": "Login as Admin",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"description": "Returns `access_token` (JWT). The test script stores it in the collection variable `{{token}}`, which the collection-level Bearer auth uses for every other request.\n\nDemo accounts (password: `password`):\n- admin@gym.test (admin)\n- manager@gym.test (manager)\n- client@gym.test (client)\n\nLogin is throttled to 5 requests per minute.",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"email\": \"admin@gym.test\",\n    \"password\": \"password\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/auth/login",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"auth",
-								"login"
-							]
-						}
-					},
-					"event": {
-						"listen": "test",
-						"script": {
-							"type": "text/javascript",
-							"exec": [
-								"const body = pm.response.json();",
-								"if (body.access_token) {",
-								"    pm.collectionVariables.set('token', body.access_token);",
-								"    console.log('token saved to {{token}}');",
-								"}"
-							]
-						}
-					}
-				},
-				{
-					"name": "Login as Manager",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"description": "Returns `access_token` (JWT). The test script stores it in the collection variable `{{token}}`, which the collection-level Bearer auth uses for every other request.\n\nDemo accounts (password: `password`):\n- admin@gym.test (admin)\n- manager@gym.test (manager)\n- client@gym.test (client)\n\nLogin is throttled to 5 requests per minute.",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"email\": \"manager@gym.test\",\n    \"password\": \"password\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/auth/login",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"auth",
-								"login"
-							]
-						}
-					},
-					"event": {
-						"listen": "test",
-						"script": {
-							"type": "text/javascript",
-							"exec": [
-								"const body = pm.response.json();",
-								"if (body.access_token) {",
-								"    pm.collectionVariables.set('token', body.access_token);",
-								"    console.log('token saved to {{token}}');",
-								"}"
-							]
-						}
-					}
-				},
-				{
-					"name": "Login as Client",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"description": "Returns `access_token` (JWT). The test script stores it in the collection variable `{{token}}`, which the collection-level Bearer auth uses for every other request.\n\nDemo accounts (password: `password`):\n- admin@gym.test (admin)\n- manager@gym.test (manager)\n- client@gym.test (client)\n\nLogin is throttled to 5 requests per minute.",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"email\": \"client@gym.test\",\n    \"password\": \"password\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/auth/login",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"auth",
-								"login"
-							]
-						}
-					},
-					"event": {
-						"listen": "test",
-						"script": {
-							"type": "text/javascript",
-							"exec": [
-								"const body = pm.response.json();",
-								"if (body.access_token) {",
-								"    pm.collectionVariables.set('token', body.access_token);",
-								"    console.log('token saved to {{token}}');",
-								"}"
-							]
-						}
-					}
-				},
-				{
-					"name": "Me",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "Current user + role + linked member profile. Requires a valid token.",
-						"url": {
-							"raw": "{{base_url}}/auth/me",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"auth",
-								"me"
-							]
-						}
-					}
-				},
-				{
-					"name": "Refresh token",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "Rotates the JWT; the old token is blacklisted. The test script saves the new one to `{{token}}`.",
-						"url": {
-							"raw": "{{base_url}}/auth/refresh",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"auth",
-								"refresh"
-							]
-						}
-					},
-					"event": {
-						"listen": "test",
-						"script": {
-							"type": "text/javascript",
-							"exec": [
-								"const body = pm.response.json();",
-								"if (body.access_token) {",
-								"    pm.collectionVariables.set('token', body.access_token);",
-								"    console.log('token saved to {{token}}');",
-								"}"
-							]
-						}
-					}
-				},
-				{
-					"name": "Logout",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "Blacklists the current JWT. The test script clears `{{token}}`.",
-						"url": {
-							"raw": "{{base_url}}/auth/logout",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"auth",
-								"logout"
-							]
-						}
-					},
-					"event": {
-						"listen": "test",
-						"script": {
-							"type": "text/javascript",
-							"exec": [
-								"pm.collectionVariables.set('token', '');"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Users (Admin only)",
-			"description": "User provisioning and role management. `role:admin` middleware returns 403 for manager/client tokens.",
-			"item": [
-				{
-					"name": "List Users",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "Paginated users (`data`, `total`, `per_page`, `next_page_url`).",
-						"url": {
-							"raw": "{{base_url}}/users?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}"
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}"
-								},
-								{
-									"key": "role",
-									"value": "client",
-									"description": "Filter by role: client|manager|admin.",
-									"disabled": true
-								},
-								{
-									"key": "search",
-									"value": "",
-									"description": "Partial match on name or email.",
-									"disabled": true
-								},
-								{
-									"key": "sort",
-									"value": "id",
-									"description": "id|name|email|role",
-									"disabled": true
-								},
-								{
-									"key": "direction",
-									"value": "asc",
-									"description": "asc|desc",
-									"disabled": true
-								}
-							]
-						}
-					}
-				},
-				{
-					"name": "Create User",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"description": "Creates a user with an explicit role. Clients also get a member profile automatically.",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Second Manager\",\n    \"email\": \"second.manager@gym.test\",\n    \"password\": \"password123\",\n    \"role\": \"manager\",\n    \"phone\": \"+380671112233\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/users",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users"
-							]
-						}
-					}
-				},
-				{
-					"name": "Get User By ID",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/users/4",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users",
-								"4"
-							]
-						}
-					}
-				},
-				{
-					"name": "Update User",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"description": "Updates name/email/password. Role changes use Change Role instead.",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Renamed User\",\n    \"email\": \"renamed@gym.test\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/users/4",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users",
-								"4"
-							]
-						}
-					}
-				},
-				{
-					"name": "Change Role",
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"description": "Set role to client|manager|admin. An admin cannot change their own role (422).",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"role\": \"manager\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/users/4/role",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users",
-								"4",
-								"role"
-							]
-						}
-					}
-				},
-				{
-					"name": "Delete User",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"description": "An admin cannot delete their own account (422).",
-						"url": {
-							"raw": "{{base_url}}/users/4",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users",
-								"4"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Coaches",
-			"item": [
-				{
-					"name": "List Coaches (filters + pagination)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/coaches?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"coaches"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}",
-									"description": "Page number, starts at 1."
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}",
-									"description": "Items per page, 1-100. Default 15."
-								},
-								{
-									"key": "name",
-									"value": "",
-									"description": "Partial match on name.",
-									"disabled": true
-								},
-								{
-									"key": "phone",
-									"value": "",
-									"description": "Partial match on phone.",
-									"disabled": true
-								},
-								{
-									"key": "with_classes",
-									"value": "1",
-									"description": "1 = coaches with classes, 0 = without.",
-									"disabled": true
-								}
-							]
-						},
-						"description": "Paginated list of coaches (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `name`, `phone`, `with_classes` (1/0).\nSort: `sort` (coach_id|name), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
-					}
-				},
-				{
-					"name": "Create Coach",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Олександр Коваленко\",\n    \"phone\": \"+380991112233\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/coaches",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"coaches"
-							]
-						}
-					}
-				},
-				{
-					"name": "Get Coach By ID",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/coaches/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"coaches",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Update Coach",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Олександр Оновлений\",\n    \"phone\": \"+380995556677\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/coaches/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"coaches",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Delete Coach",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/coaches/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"coaches",
-								"1"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Members",
-			"item": [
-				{
-					"name": "List Members (filters + pagination)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/members?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"members"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}",
-									"description": "Page number, starts at 1."
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}",
-									"description": "Items per page, 1-100. Default 15."
-								},
-								{
-									"key": "name",
-									"value": "",
-									"description": "Partial match on name.",
-									"disabled": true
-								},
-								{
-									"key": "phone",
-									"value": "",
-									"description": "Partial match on phone.",
-									"disabled": true
-								},
-								{
-									"key": "join_date_from",
-									"value": "2026-01-01",
-									"description": "Inclusive lower bound (YYYY-MM-DD).",
-									"disabled": true
-								},
-								{
-									"key": "join_date_to",
-									"value": "2026-12-31",
-									"description": "Inclusive upper bound (YYYY-MM-DD).",
-									"disabled": true
-								},
-								{
-									"key": "active",
-									"value": "1",
-									"description": "1 = has a current subscription, 0 = does not.",
-									"disabled": true
-								}
-							]
-						},
-						"description": "Paginated list of members (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `name`, `phone`, `join_date_from`, `join_date_to`, `active` (1/0).\nSort: `sort` (member_id|name|join_date), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
-					}
-				},
-				{
-					"name": "Create Member",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Марія Іваненко\",\n    \"phone\": \"+380931234567\",\n    \"join_date\": \"2026-10-13\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/members",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"members"
-							]
-						}
-					}
-				},
-				{
-					"name": "Get Member By ID",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/members/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"members",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Update Member",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Марія Петренко\",\n    \"phone\": \"+380937654321\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/members/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"members",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Delete Member",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/members/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"members",
-								"1"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Subscriptions",
-			"item": [
-				{
-					"name": "List Subscriptions (filters + pagination)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/subscriptions?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"subscriptions"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}",
-									"description": "Page number, starts at 1."
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}",
-									"description": "Items per page, 1-100. Default 15."
-								},
-								{
-									"key": "member_id",
-									"value": "1",
-									"description": "Exact member id.",
-									"disabled": true
-								},
-								{
-									"key": "price_min",
-									"value": "",
-									"description": "Minimum price.",
-									"disabled": true
-								},
-								{
-									"key": "price_max",
-									"value": "",
-									"description": "Maximum price.",
-									"disabled": true
-								},
-								{
-									"key": "start_date_from",
-									"value": "",
-									"description": "Inclusive lower bound (YYYY-MM-DD).",
-									"disabled": true
-								},
-								{
-									"key": "start_date_to",
-									"value": "",
-									"description": "Inclusive upper bound (YYYY-MM-DD).",
-									"disabled": true
-								},
-								{
-									"key": "end_date_from",
-									"value": "",
-									"description": "Inclusive lower bound (YYYY-MM-DD).",
-									"disabled": true
-								},
-								{
-									"key": "end_date_to",
-									"value": "",
-									"description": "Inclusive upper bound (YYYY-MM-DD).",
-									"disabled": true
-								},
-								{
-									"key": "active",
-									"value": "1",
-									"description": "1 = end_date >= today, 0 = expired.",
-									"disabled": true
-								}
-							]
-						},
-						"description": "Paginated list of subscriptions (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `price_min`, `price_max`, `start_date_from/to`, `end_date_from/to`, `active` (1/0).\nSort: `sort` (sub_id|member_id|start_date|end_date|price), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
-					}
-				},
-				{
-					"name": "Create Subscription",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"member_id\": 1,\n    \"start_date\": \"2026-10-15\",\n    \"end_date\": \"2026-11-15\",\n    \"price\": 1200.50\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/subscriptions",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"subscriptions"
-							]
-						}
-					}
-				},
-				{
-					"name": "Get Subscription By ID",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/subscriptions/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"subscriptions",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Update Subscription",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"end_date\": \"2026-12-15\",\n    \"price\": 1400.00\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/subscriptions/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"subscriptions",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Delete Subscription",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/subscriptions/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"subscriptions",
-								"1"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Classes",
-			"item": [
-				{
-					"name": "List Classes (filters + pagination)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/classes?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"classes"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}",
-									"description": "Page number, starts at 1."
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}",
-									"description": "Items per page, 1-100. Default 15."
-								},
-								{
-									"key": "title",
-									"value": "",
-									"description": "Partial match on title.",
-									"disabled": true
-								},
-								{
-									"key": "coach_id",
-									"value": "1",
-									"description": "Exact coach id.",
-									"disabled": true
-								},
-								{
-									"key": "class_time_from",
-									"value": "",
-									"description": "Inclusive lower bound (YYYY-MM-DD HH:MM:SS).",
-									"disabled": true
-								},
-								{
-									"key": "class_time_to",
-									"value": "",
-									"description": "Inclusive upper bound (YYYY-MM-DD HH:MM:SS).",
-									"disabled": true
-								},
-								{
-									"key": "capacity_min",
-									"value": "",
-									"description": "Minimum capacity.",
-									"disabled": true
-								},
-								{
-									"key": "capacity_max",
-									"value": "",
-									"description": "Maximum capacity.",
-									"disabled": true
-								},
-								{
-									"key": "available",
-									"value": "1",
-									"description": "1 = still has free seats, 0 = full.",
-									"disabled": true
-								}
-							]
-						},
-						"description": "Paginated list of classes (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `title`, `coach_id`, `class_time_from/to`, `capacity_min/max`, `available` (1/0).\nSort: `sort` (class_id|title|class_time|capacity), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
-					}
-				},
-				{
-					"name": "Create Class",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"title\": \"Йога\",\n    \"coach_id\": 1,\n    \"class_time\": \"2026-10-20 18:00:00\",\n    \"capacity\": 20\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/classes",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"classes"
-							]
-						}
-					}
-				},
-				{
-					"name": "Get Class By ID",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/classes/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"classes",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Update Class",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"title\": \"Хатха-Йога\",\n    \"capacity\": 15\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/classes/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"classes",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Delete Class",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/classes/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"classes",
-								"1"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Registrations",
-			"item": [
-				{
-					"name": "List Registrations (filters + pagination)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"registrations"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}",
-									"description": "Page number, starts at 1."
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}",
-									"description": "Items per page, 1-100. Default 15."
-								},
-								{
-									"key": "member_id",
-									"value": "1",
-									"description": "Exact member id.",
-									"disabled": true
-								},
-								{
-									"key": "class_id",
-									"value": "1",
-									"description": "Exact class id.",
-									"disabled": true
-								}
-							]
-						},
-						"description": "Paginated list of registrations (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `class_id`.\nSort: `sort` (member_id|class_id), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
-					}
-				},
-				{
-					"name": "Filter Registrations by Member",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"registrations"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}",
-									"description": "Page number, starts at 1."
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}",
-									"description": "Items per page, 1-100. Default 15."
-								},
-								{
-									"key": "member_id",
-									"value": "1"
-								}
-							]
-						},
-						"description": "Paginated list of registrations (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `class_id`.\nSort: `sort` (member_id|class_id), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
-					}
-				},
-				{
-					"name": "Filter Registrations by Class",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"registrations"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "{{page}}",
-									"description": "Page number, starts at 1."
-								},
-								{
-									"key": "per_page",
-									"value": "{{per_page}}",
-									"description": "Items per page, 1-100. Default 15."
-								},
-								{
-									"key": "class_id",
-									"value": "1"
-								}
-							]
-						},
-						"description": "Paginated list of registrations (`data`, `total`, `per_page`, `next_page_url`).\nFilters: `member_id`, `class_id`.\nSort: `sort` (member_id|class_id), `direction` (asc|desc).\nPage 2 with 10 per page: `?per_page=10&page=2`."
-					}
-				},
-				{
-					"name": "Register Member to Class",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"member_id\": 1,\n    \"class_id\": 1\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/registrations",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"registrations"
-							]
-						}
-					}
-				},
-				{
-					"name": "Get Registration By Composite ID",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/registrations/1/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"registrations",
-								"1",
-								"1"
-							]
-						}
-					}
-				},
-				{
-					"name": "Cancel Registration",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/registrations/1/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"registrations",
-								"1",
-								"1"
-							]
-						}
-					}
-				}
-			]
-		}
-	],
-	"auth": {
-		"type": "bearer",
-		"bearer": [
-			{
-				"key": "token",
-				"value": "{{token}}",
-				"type": "string"
-			}
-		]
-	}
+    "info": {
+        "name": "Gym API (Laravel)",
+        "description": "REST API for a sports club built with Laravel 11, JWT auth and role-based access.\n\n**Quick start**\n\n1. Start the API: `php artisan serve`.\n2. Run **Auth → Login as Admin** first. The test script stores `access_token` in the `{{token}}` collection variable.\n3. Create resources in dependency order: Rooms → Coaches → Plans → Members → Classes → Subscriptions → Payments → Registrations → Attendances.\n4. Create requests save the new ID into collection variables (`{{room_id}}`, `{{plan_id}}`, `{{class_id}}`, ...), so later requests work without manual edits.\n\n**Demo accounts** (password `password`):\n- `admin@gym.test` — admin\n- `manager@gym.test` — manager\n- `client@gym.test` — client\n\n**Conventions**\n- Every `index` endpoint supports filtering, sorting (`sort`, `direction`) and pagination (`page`, `per_page`, max 100).\n- JWT is sent as `Authorization: Bearer {{token}}`.\n- Dates use `YYYY-MM-DD`; class times use `YYYY-MM-DD HH:mm:ss`.\n\nSee `README.md` and `PROJECT.md` in the repository for setup and domain documentation.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://127.0.0.1:8000/api",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "page",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "per_page",
+            "value": "10",
+            "type": "string"
+        },
+        {
+            "key": "user_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "coach_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "member_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "plan_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "sub_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "payment_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "room_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "equipment_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "class_id",
+            "value": "1",
+            "type": "string"
+        },
+        {
+            "key": "target_class_id",
+            "value": "2",
+            "type": "string"
+        },
+        {
+            "key": "attendance_id",
+            "value": "1",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Register (client)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Creates a client account plus a linked member profile. Returns a JWT and stores it in `{{token}}`.\n\nEmail must be unique — change it between runs. Throttled to 5 requests per minute.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"New Client\",\n    \"email\": \"new.client@gym.test\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\",\n    \"phone\": \"+380500000000\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": ["{{base_url}}"],
+                            "path": ["auth", "register"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.access_token) {",
+                                    "    pm.collectionVariables.set('token', body.access_token);",
+                                    "    console.log('Saved token:', body.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login as Admin",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Logs in as the demo admin account and stores the JWT in `{{token}}`. All other requests use the collection-level Bearer auth.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"admin@gym.test\",\n    \"password\": \"password\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["auth", "login"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.access_token) {",
+                                    "    pm.collectionVariables.set('token', body.access_token);",
+                                    "    console.log('Saved token:', body.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login as Manager",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Logs in as the demo manager account and stores the JWT in `{{token}}`. All other requests use the collection-level Bearer auth.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"manager@gym.test\",\n    \"password\": \"password\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["auth", "login"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.access_token) {",
+                                    "    pm.collectionVariables.set('token', body.access_token);",
+                                    "    console.log('Saved token:', body.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login as Client",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Logs in as the demo client account and stores the JWT in `{{token}}`. All other requests use the collection-level Bearer auth.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"client@gym.test\",\n    \"password\": \"password\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["auth", "login"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.access_token) {",
+                                    "    pm.collectionVariables.set('token', body.access_token);",
+                                    "    console.log('Saved token:', body.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Me",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the authenticated user and the linked member profile (for clients).",
+                        "url": {
+                            "raw": "{{base_url}}/auth/me",
+                            "host": ["{{base_url}}"],
+                            "path": ["auth", "me"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Refresh token",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Rotates the JWT. The previous token is blacklisted and the new one is stored in `{{token}}`.",
+                        "url": {
+                            "raw": "{{base_url}}/auth/refresh",
+                            "host": ["{{base_url}}"],
+                            "path": ["auth", "refresh"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.access_token) {",
+                                    "    pm.collectionVariables.set('token', body.access_token);",
+                                    "    console.log('Saved token:', body.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Invalidates the current JWT.",
+                        "url": {
+                            "raw": "{{base_url}}/auth/logout",
+                            "host": ["{{base_url}}"],
+                            "path": ["auth", "logout"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Registration, login, token refresh and logout. Login requests save the JWT to `{{token}}`."
+        },
+        {
+            "name": "Users (Admin only)",
+            "item": [
+                {
+                    "name": "List Users",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only. Filters: `role` (admin/manager/client), `search` (name or email), `sort` (id/name/email/role), `direction`, `per_page`, `page`.",
+                        "url": {
+                            "raw": "{{base_url}}/users?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["users"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "role",
+                                    "value": "manager",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "search",
+                                    "value": "client",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "name",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create User",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only. Creates a user with an explicit role. Client accounts get a linked member profile.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Second Manager\",\n    \"email\": \"second.manager@gym.test\",\n    \"password\": \"password123\",\n    \"role\": \"manager\",\n    \"phone\": \"+380671112233\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users",
+                            "host": ["{{base_url}}"],
+                            "path": ["users"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.id) {",
+                                    "    pm.collectionVariables.set('user_id', body.id);",
+                                    "    console.log('Saved user_id:', body.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get User By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns a user with the linked member profile.",
+                        "url": {
+                            "raw": "{{base_url}}/users/{{user_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "{{user_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update User",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Updates name, email or password. Role changes use the dedicated endpoint below.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Renamed User\",\n    \"email\": \"renamed@gym.test\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/{{user_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "{{user_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Change Role",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only. Allowed roles: `admin`, `manager`, `client`. You cannot change your own role.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"role\": \"manager\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/{{user_id}}/role",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "{{user_id}}", "role"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete User",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only. You cannot delete your own account.",
+                        "url": {
+                            "raw": "{{base_url}}/users/{{user_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "{{user_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "User provisioning and role management. All endpoints require the admin role."
+        },
+        {
+            "name": "Coaches",
+            "item": [
+                {
+                    "name": "List Coaches",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `name`, `phone`, `with_classes` (1/0), `sort` (coach_id/name), `direction`, `per_page`, `page`. Each item includes `classes_count`.",
+                        "url": {
+                            "raw": "{{base_url}}/coaches?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["coaches"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "name",
+                                    "value": "Oleksandr",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "phone",
+                                    "value": "+380",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "with_classes",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "name",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Coach",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Managers and admins can create coaches. The new ID is stored in `{{coach_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Oleksandr Kovalenko\",\n    \"phone\": \"+380991112233\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/coaches",
+                            "host": ["{{base_url}}"],
+                            "path": ["coaches"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.coach_id) {",
+                                    "    pm.collectionVariables.set('coach_id', body.coach_id);",
+                                    "    console.log('Saved coach_id:', body.coach_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Coach By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the coach with their classes.",
+                        "url": {
+                            "raw": "{{base_url}}/coaches/{{coach_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["coaches", "{{coach_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Coach",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Partial update is supported; omitted fields stay unchanged.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Oleksandr Updated\",\n    \"phone\": \"+380995556677\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/coaches/{{coach_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["coaches", "{{coach_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Coach",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only.",
+                        "url": {
+                            "raw": "{{base_url}}/coaches/{{coach_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["coaches", "{{coach_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Trainers. Create/update: manager or admin. Delete: admin only."
+        },
+        {
+            "name": "Members",
+            "item": [
+                {
+                    "name": "List Members",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `name`, `phone`, `join_date_from`, `join_date_to`, `active` (has a non-expired subscription), `sort` (member_id/name/join_date), `direction`, `per_page`, `page`.",
+                        "url": {
+                            "raw": "{{base_url}}/members?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["members"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "name",
+                                    "value": "Maria",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "phone",
+                                    "value": "+380",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "join_date_from",
+                                    "value": "2026-01-01",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "join_date_to",
+                                    "value": "2026-12-31",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "active",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "join_date",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "desc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Member",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Creates a member profile. `join_date` defaults to today when omitted. The new ID is stored in `{{member_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Maria Ivanenko\",\n    \"phone\": \"+380931234567\",\n    \"join_date\": \"2026-11-10\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/members",
+                            "host": ["{{base_url}}"],
+                            "path": ["members"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.member_id) {",
+                                    "    pm.collectionVariables.set('member_id', body.member_id);",
+                                    "    console.log('Saved member_id:', body.member_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Member By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the member with subscriptions and registered classes.",
+                        "url": {
+                            "raw": "{{base_url}}/members/{{member_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["members", "{{member_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Member",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Staff can update any member; a client can update only their own profile.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Maria Petrenko\",\n    \"phone\": \"+380937654321\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/members/{{member_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["members", "{{member_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Member",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only. Related subscriptions, registrations and attendances are deleted by cascade.",
+                        "url": {
+                            "raw": "{{base_url}}/members/{{member_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["members", "{{member_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Club members. Managers/admins manage all members; clients can view and update their own profile."
+        },
+        {
+            "name": "Membership Plans",
+            "item": [
+                {
+                    "name": "List Plans",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `name`, `price_min`, `price_max`, `duration_min`, `duration_max`, `is_active`, `sort` (plan_id/name/duration_days/price/is_active), `direction`, `per_page`, `page`. Each item includes `subscriptions_count`.",
+                        "url": {
+                            "raw": "{{base_url}}/plans?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["plans"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "name",
+                                    "value": "Monthly",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "price_min",
+                                    "value": "500",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "price_max",
+                                    "value": "2000",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "duration_min",
+                                    "value": "30",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "duration_max",
+                                    "value": "365",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "is_active",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "price",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Plan",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Managers and admins can create plans. The new ID is stored in `{{plan_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Monthly\",\n    \"duration_days\": 30,\n    \"price\": 900,\n    \"description\": \"Full club access for 30 days\",\n    \"is_active\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/plans",
+                            "host": ["{{base_url}}"],
+                            "path": ["plans"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.plan_id) {",
+                                    "    pm.collectionVariables.set('plan_id', body.plan_id);",
+                                    "    console.log('Saved plan_id:', body.plan_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Plan By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the plan with its subscriptions and members.",
+                        "url": {
+                            "raw": "{{base_url}}/plans/{{plan_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["plans", "{{plan_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Plan",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Deactivating a plan prevents new subscriptions but keeps existing ones.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"price\": 1000,\n    \"is_active\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/plans/{{plan_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["plans", "{{plan_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Plan",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only. Existing subscriptions keep working with a null `plan_id`.",
+                        "url": {
+                            "raw": "{{base_url}}/plans/{{plan_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["plans", "{{plan_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Subscription plans. A plan defines price and duration used by new subscriptions."
+        },
+        {
+            "name": "Subscriptions",
+            "item": [
+                {
+                    "name": "List Subscriptions",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `member_id`, `plan_id`, `price_min`, `price_max`, `start_date_from/to`, `end_date_from/to`, `active`, `sort` (sub_id/member_id/plan_id/start_date/end_date/price), `direction`, `per_page`, `page`.",
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["subscriptions"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "member_id",
+                                    "value": "{{member_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "plan_id",
+                                    "value": "{{plan_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "price_min",
+                                    "value": "500",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "price_max",
+                                    "value": "2000",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "start_date_from",
+                                    "value": "2026-01-01",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "start_date_to",
+                                    "value": "2026-12-31",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "end_date_from",
+                                    "value": "2026-01-01",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "end_date_to",
+                                    "value": "2026-12-31",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "active",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "end_date",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Subscription",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "When `plan_id` is provided, `price` and `end_date` are derived from the plan (`start_date + duration_days`). Explicit values override the plan. Inactive plans are rejected. The new ID is stored in `{{sub_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"member_id\": \"{{member_id}}\",\n    \"plan_id\": \"{{plan_id}}\",\n    \"start_date\": \"2026-12-01\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions",
+                            "host": ["{{base_url}}"],
+                            "path": ["subscriptions"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.sub_id) {",
+                                    "    pm.collectionVariables.set('sub_id', body.sub_id);",
+                                    "    console.log('Saved sub_id:', body.sub_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Subscription By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the subscription with its member, plan and payments.",
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions/{{sub_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["subscriptions", "{{sub_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Subscription",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Updates dates, price or plan. Omitting `price`/`end_date` while sending `plan_id` recalculates them from the plan.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"price\": 950,\n    \"end_date\": \"2027-01-15\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions/{{sub_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["subscriptions", "{{sub_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Subscription",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Deletes the subscription and its payments (cascade).",
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions/{{sub_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["subscriptions", "{{sub_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Club subscriptions. Each subscription belongs to a member and optionally to a membership plan."
+        },
+        {
+            "name": "Payments",
+            "item": [
+                {
+                    "name": "List Payments",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `sub_id`, `status` (pending/completed/failed/overdue), `method` (cash/card/online/transfer), `amount_min/max`, `payment_date_from/to`, `sort` (payment_id/amount/payment_date/status), `direction`, `per_page`, `page`.",
+                        "url": {
+                            "raw": "{{base_url}}/payments?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["payments"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "sub_id",
+                                    "value": "{{sub_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "status",
+                                    "value": "pending",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "method",
+                                    "value": "card",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "amount_min",
+                                    "value": "100",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "amount_max",
+                                    "value": "5000",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "payment_date_from",
+                                    "value": "2026-01-01",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "payment_date_to",
+                                    "value": "2026-12-31",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "payment_date",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "desc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Payment",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Managers and admins can record payments. The cron command `payments:mark-overdue` flips old pending payments to `overdue`. The new ID is stored in `{{payment_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"sub_id\": \"{{sub_id}}\",\n    \"amount\": 900,\n    \"payment_date\": \"2026-12-01\",\n    \"method\": \"card\",\n    \"status\": \"pending\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/payments",
+                            "host": ["{{base_url}}"],
+                            "path": ["payments"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.payment_id) {",
+                                    "    pm.collectionVariables.set('payment_id', body.payment_id);",
+                                    "    console.log('Saved payment_id:', body.payment_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Payment By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the payment with its subscription and member.",
+                        "url": {
+                            "raw": "{{base_url}}/payments/{{payment_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["payments", "{{payment_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Payment",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Updates payment status or method. Allowed statuses: pending, completed, failed, overdue.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"completed\",\n    \"method\": \"online\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/payments/{{payment_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["payments", "{{payment_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Payment",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only.",
+                        "url": {
+                            "raw": "{{base_url}}/payments/{{payment_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["payments", "{{payment_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Subscription payments. A daily cron marks stale pending payments as overdue."
+        },
+        {
+            "name": "Rooms",
+            "item": [
+                {
+                    "name": "List Rooms",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `name`, `capacity_min/max`, `with_equipment` (1/0), `with_classes` (1/0), `sort` (room_id/name/capacity), `direction`, `per_page`, `page`. Each item includes `equipment_count` and `classes_count`.",
+                        "url": {
+                            "raw": "{{base_url}}/rooms?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["rooms"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "name",
+                                    "value": "Main",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "capacity_min",
+                                    "value": "10",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "capacity_max",
+                                    "value": "50",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "with_equipment",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "with_classes",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "capacity",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "desc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Room",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Managers and admins can create rooms. The new ID is stored in `{{room_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Main Hall\",\n    \"capacity\": 30,\n    \"description\": \"Weights and cardio equipment\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/rooms",
+                            "host": ["{{base_url}}"],
+                            "path": ["rooms"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.room_id) {",
+                                    "    pm.collectionVariables.set('room_id', body.room_id);",
+                                    "    console.log('Saved room_id:', body.room_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Room By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the room with its equipment and scheduled classes.",
+                        "url": {
+                            "raw": "{{base_url}}/rooms/{{room_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["rooms", "{{room_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Room",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "A room cannot be shrunk below the largest class already scheduled in it.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"capacity\": 35\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/rooms/{{room_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["rooms", "{{room_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Room",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only. Classes and equipment keep existing with a null `room_id`.",
+                        "url": {
+                            "raw": "{{base_url}}/rooms/{{room_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["rooms", "{{room_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Club rooms. Each room has a capacity and hosts classes and equipment."
+        },
+        {
+            "name": "Equipment",
+            "item": [
+                {
+                    "name": "List Equipment",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `name`, `condition` (excellent/good/fair/broken), `room_id`, `quantity_min`, `sort` (equipment_id/name/quantity/condition), `direction`, `per_page`, `page`.",
+                        "url": {
+                            "raw": "{{base_url}}/equipment?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["equipment"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "name",
+                                    "value": "Dumbbell",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "condition",
+                                    "value": "good",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "room_id",
+                                    "value": "{{room_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "quantity_min",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "name",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Equipment",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Managers and admins can add equipment. The new ID is stored in `{{equipment_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Dumbbells\",\n    \"quantity\": 20,\n    \"condition\": \"good\",\n    \"room_id\": \"{{room_id}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/equipment",
+                            "host": ["{{base_url}}"],
+                            "path": ["equipment"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.equipment_id) {",
+                                    "    pm.collectionVariables.set('equipment_id', body.equipment_id);",
+                                    "    console.log('Saved equipment_id:', body.equipment_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Equipment By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the item with its room.",
+                        "url": {
+                            "raw": "{{base_url}}/equipment/{{equipment_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["equipment", "{{equipment_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Equipment",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Updates quantity, condition or room.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"condition\": \"fair\",\n    \"quantity\": 18\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/equipment/{{equipment_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["equipment", "{{equipment_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Equipment",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only.",
+                        "url": {
+                            "raw": "{{base_url}}/equipment/{{equipment_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["equipment", "{{equipment_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Club equipment. Every item optionally belongs to a room."
+        },
+        {
+            "name": "Classes",
+            "item": [
+                {
+                    "name": "List Classes",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `title`, `coach_id`, `room_id`, `class_time_from/to`, `capacity_min/max`, `available` (1/0), `sort` (class_id/title/class_time/capacity), `direction`, `per_page`, `page`. Each item includes `members_count`.",
+                        "url": {
+                            "raw": "{{base_url}}/classes?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["classes"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "title",
+                                    "value": "Yoga",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "coach_id",
+                                    "value": "{{coach_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "room_id",
+                                    "value": "{{room_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "class_time_from",
+                                    "value": "2026-12-01 00:00:00",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "class_time_to",
+                                    "value": "2026-12-31 23:59:59",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "capacity_min",
+                                    "value": "5",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "capacity_max",
+                                    "value": "30",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "available",
+                                    "value": "1",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "class_time",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Class",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Managers and admins can schedule classes. The capacity must not exceed the room capacity. The new ID is stored in `{{class_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"title\": \"Yoga\",\n    \"coach_id\": \"{{coach_id}}\",\n    \"room_id\": \"{{room_id}}\",\n    \"class_time\": \"2026-12-05 18:00:00\",\n    \"capacity\": 10\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/classes",
+                            "host": ["{{base_url}}"],
+                            "path": ["classes"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.class_id) {",
+                                    "    pm.collectionVariables.set('class_id', body.class_id);",
+                                    "    console.log('Saved class_id:', body.class_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Class By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the class with its coach, room and registered members.",
+                        "url": {
+                            "raw": "{{base_url}}/classes/{{class_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["classes", "{{class_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Class",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Capacity is validated against the assigned room.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"title\": \"Hatha Yoga\",\n    \"capacity\": 12\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/classes/{{class_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["classes", "{{class_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Class",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Deletes the class and its registrations and attendances (cascade). Manager or admin.",
+                        "url": {
+                            "raw": "{{base_url}}/classes/{{class_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["classes", "{{class_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Group classes. Each class has a coach, a room, a time and a capacity."
+        },
+        {
+            "name": "Registrations",
+            "item": [
+                {
+                    "name": "List Registrations",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Staff only. Filters: `member_id`, `class_id`, `sort` (member_id/class_id), `direction`, `per_page`, `page`.",
+                        "url": {
+                            "raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["registrations"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "member_id",
+                                    "value": "{{member_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "class_id",
+                                    "value": "{{class_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "class_id",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Filter Registrations by Member",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Registrations of one member.",
+                        "url": {
+                            "raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}&member_id={{member_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["registrations"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "member_id",
+                                    "value": "{{member_id}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Filter Registrations by Class",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Registrations for one class.",
+                        "url": {
+                            "raw": "{{base_url}}/registrations?page={{page}}&per_page={{per_page}}&class_id={{class_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["registrations"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "class_id",
+                                    "value": "{{class_id}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Register Member to Class",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Registers a member for a class. Checks duplicates and class capacity. Clients may register only their own member profile.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"member_id\": \"{{member_id}}\",\n    \"class_id\": \"{{class_id}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/registrations",
+                            "host": ["{{base_url}}"],
+                            "path": ["registrations"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Get Registration By Composite ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Registrations are keyed by the `(member_id, class_id)` pair.",
+                        "url": {
+                            "raw": "{{base_url}}/registrations/{{member_id}}/{{class_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "registrations",
+                                "{{member_id}}",
+                                "{{class_id}}"
+                            ],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Move Registration to Another Class",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Moves a registration to another class. The new class must have free capacity and must not already contain this member. Update `{{target_class_id}}` to the destination class.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"class_id\": \"{{target_class_id}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/registrations/{{member_id}}/{{class_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "registrations",
+                                "{{member_id}}",
+                                "{{class_id}}"
+                            ],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Cancel Registration",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Removes the registration. Clients can cancel only their own registrations.",
+                        "url": {
+                            "raw": "{{base_url}}/registrations/{{member_id}}/{{class_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": [
+                                "registrations",
+                                "{{member_id}}",
+                                "{{class_id}}"
+                            ],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Member registrations for classes (many-to-many pivot with capacity rules)."
+        },
+        {
+            "name": "Attendances",
+            "item": [
+                {
+                    "name": "List Attendances",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filters: `member_id`, `class_id`, `status` (present/absent/late), `checked_in_from/to`, `sort` (attendance_id/status/checked_in_at), `direction`, `per_page`, `page`.",
+                        "url": {
+                            "raw": "{{base_url}}/attendances?page={{page}}&per_page={{per_page}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["attendances"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "{{page}}"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}"
+                                },
+                                {
+                                    "key": "member_id",
+                                    "value": "{{member_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "class_id",
+                                    "value": "{{class_id}}",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "status",
+                                    "value": "present",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "checked_in_from",
+                                    "value": "2026-12-01",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "checked_in_to",
+                                    "value": "2026-12-31",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "checked_in_at",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "desc",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Attendance",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Records attendance. The member must already be registered for the class. `checked_in_at` defaults to now for present/late. The new ID is stored in `{{attendance_id}}`.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"member_id\": \"{{member_id}}\",\n    \"class_id\": \"{{class_id}}\",\n    \"status\": \"present\",\n    \"notes\": \"Arrived on time\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/attendances",
+                            "host": ["{{base_url}}"],
+                            "path": ["attendances"],
+                            "query": []
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const body = pm.response.json();",
+                                    "if (body.attendance_id) {",
+                                    "    pm.collectionVariables.set('attendance_id', body.attendance_id);",
+                                    "    console.log('Saved attendance_id:', body.attendance_id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Attendance By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Returns the attendance with member and class details.",
+                        "url": {
+                            "raw": "{{base_url}}/attendances/{{attendance_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["attendances", "{{attendance_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Update Attendance",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Updates status or notes. Use `absent` to mark a no-show.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"late\",\n    \"notes\": \"Arrived 10 minutes late\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/attendances/{{attendance_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["attendances", "{{attendance_id}}"],
+                            "query": []
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Attendance",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Admin only.",
+                        "url": {
+                            "raw": "{{base_url}}/attendances/{{attendance_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["attendances", "{{attendance_id}}"],
+                            "query": []
+                        }
+                    }
+                }
+            ],
+            "description": "Actual class visits. Attendance requires an existing registration."
+        },
+        {
+            "name": "Pagination Examples",
+            "item": [
+                {
+                    "name": "Members - page 1, 10 per page",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Standard paginated response: `data`, `current_page`, `per_page`, `total`, `last_page` and navigation URLs.",
+                        "url": {
+                            "raw": "{{base_url}}/members?page=1&per_page=10",
+                            "host": ["{{base_url}}"],
+                            "path": ["members"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "10"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Members - page 2, 10 per page",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/members?page=2&per_page=10",
+                            "host": ["{{base_url}}"],
+                            "path": ["members"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "2"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "10"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Classes - page 2 with filters",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filtering and pagination combined: only classes with free seats, sorted by time.",
+                        "url": {
+                            "raw": "{{base_url}}/classes?page=2&per_page=10&available=1&sort=class_time&direction=asc",
+                            "host": ["{{base_url}}"],
+                            "path": ["classes"],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "2"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "10"
+                                },
+                                {
+                                    "key": "available",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "class_time"
+                                },
+                                {
+                                    "key": "direction",
+                                    "value": "asc"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Attendances - present only",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "description": "Filter by attendance status and paginate.",
+                        "url": {
+                            "raw": "{{base_url}}/attendances?status=present&per_page=10&page=1",
+                            "host": ["{{base_url}}"],
+                            "path": ["attendances"],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "present"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "10"
+                                },
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "description": "Examples of `page` / `per_page` combined with filters and sorting."
+        }
+    ]
 }

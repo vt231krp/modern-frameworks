@@ -48,4 +48,9 @@ class Member extends Model
     {
         return $this->hasMany(Registration::class, 'member_id', 'member_id');
     }
+
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class, 'member_id', 'member_id');
+    }
 }

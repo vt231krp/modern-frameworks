@@ -26,9 +26,13 @@ class RegistrationPolicy
         return true;
     }
 
+    /**
+     * A registration can be moved to another class by staff or by the
+     * client who owns the member profile.
+     */
     public function update(User $user, Registration $registration): bool
     {
-        return false;
+        return $user->role->isStaff() || $registration->member?->user_id === $user->id;
     }
 
     public function delete(User $user, Registration $registration): bool
