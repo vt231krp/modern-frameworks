@@ -1,0 +1,10 @@
+lexik_jwt_authentication:
+    # HS256 keeps local setup self-contained: the shared secret lives in .env
+    # instead of requiring an RSA keypair. Replace it for production.
+    secret_key: '%env(JWT_SECRET_KEY)%'
+    public_key: '%env(JWT_PUBLIC_KEY)%'
+    pass_phrase: '%env(JWT_PASSPHRASE)%'
+    token_ttl: '%jwt_ttl%'
+    user_id_claim: sub
+    encoder:
+        signature_algorithm: HS256
